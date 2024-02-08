@@ -96,9 +96,13 @@ class SubprocessBase(TaskContainer):
                 self.cfg.get("task_runtime", "command_shell")
                 + " ../command >> ../stdout.txt 2>> ../stderr.txt",
             ]
-            proc = subprocess.Popen(
+            # start = time.process_time()
+            proc = psutil.Popen(
                 invocation, stdout=cli_log, stderr=subprocess.STDOUT, cwd=self.host_dir
             )
+            # proc = subprocess.Popen(
+            #     invocation, stdout=cli_log, stderr=subprocess.STDOUT, cwd=self.host_dir
+            # )
             logger.notice(  # pyre-ignore
                 _(f"{self.cli_name} run", pid=proc.pid, log=cli_log_filename)
             )
@@ -106,16 +110,21 @@ class SubprocessBase(TaskContainer):
 
             # long-poll for completion
             exit_code = None
+            cpu_times = proc.cpu_times()
+            iteration = 0
             while exit_code is None:
+                iteration += 1
+                cpu_times = proc.cpu_times()
                 if terminating():
                     proc.terminate()
                 try:
                     exit_code = proc.wait(1)
-                except subprocess.TimeoutExpired:
+                except psutil.TimeoutExpired:
                     pass
                 poll_stderr()
                 cli_log.flush()
                 poll_cli_log()
+            logger.info("===CPU TIMES: %s===", str(cpu_times))
             if terminating():
                 raise Terminated()
             assert isinstance(exit_code, int)
